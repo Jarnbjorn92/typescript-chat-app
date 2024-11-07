@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useWebSocket } from "../composables/useWebSocket";
-import type { Message } from "../types";
 
 const testMessage = ref("");
 const lastEvent = ref("");

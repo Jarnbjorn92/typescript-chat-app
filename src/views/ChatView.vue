@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { onMounted } from "vue";
-import { useRoute } from "vue-router";
+// import { useRoute } from "vue-router";
 import { useChatStore } from "@/stores/chat";
 import ChatRoom from "@/components/ChatRoom.vue";
 import UserList from "@/components/UserList.vue";
 
 
-const route = useRoute();
+// const route = useRoute();
 const chatStore = useChatStore();
 
 onMounted(() => {
   // Init chat room
-  const roomId = route.params.roomId as string;
+  // const roomId = route.params.roomId as string;
   // Add room data fetch backend here
 });
 </script>

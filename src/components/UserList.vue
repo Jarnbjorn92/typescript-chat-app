@@ -1,28 +1,28 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { useChatStore } from "../stores/chat";
+// import { useChatStore } from "../stores/chat";
 import type { User } from "../types";
 
-const chatStore = useChatStore();
+// const chatStore = useChatStore();
 
-// Normally you'd fetch this from your backend
+// Connect to backend later
 const users = ref<User[]>([
   {
     id: "1",
-    username: "Alice Smith",
-    avatar: "A",
+    username: "James Holden",
+    avatar: "JH",
     isOnline: true,
   },
   {
     id: "2",
-    username: "Bob Johnson",
-    avatar: "B",
+    username: "Amos Burton",
+    avatar: "AB",
     isOnline: true,
   },
   {
     id: "3",
-    username: "Carol Wilson",
-    avatar: "C",
+    username: "Joe Millar",
+    avatar: "JM",
     isOnline: false,
   },
 ]);
@@ -42,7 +42,7 @@ const getInitials = (username: string) => {
 };
 
 const startChat = (user: User) => {
-  // In a real app, this would create or open a private chat
+  // Create or open a private chat later
   console.log("Starting chat with:", user.username);
 };
 </script>

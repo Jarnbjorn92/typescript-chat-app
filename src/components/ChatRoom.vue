@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import type { Message, User } from '../types';
+import type { User } from '../types';
 import { useWebSocket } from '../composables/useWebSocket';
 
 const props = defineProps<{

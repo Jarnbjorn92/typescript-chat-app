@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { onMounted } from "vue";
 import { useRoute } from "vue-router";
-import { useChatStore } from "../stores/chat";
-import ChatRoom from "../components/ChatRoom.vue";
+import { useChatStore } from "@/stores/chat";
+import ChatRoom from "@/components/ChatRoom.vue";
+import UserList from "@/components/UserList.vue";
 
 
 const route = useRoute();

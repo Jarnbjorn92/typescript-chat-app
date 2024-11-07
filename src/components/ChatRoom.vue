@@ -1,17 +1,15 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
-import type { Message, User } from "../types";
-import { useWebSocket } from "../composables/useWebSocket";
+import { ref, computed } from 'vue';
+import type { Message, User } from '../types';
+import { useWebSocket } from '../composables/useWebSocket';
 
 const props = defineProps<{
   roomId: string;
   currentUser: User;
 }>();
 
-const { messages, sendMessage, isConnected } = useWebSocket(
-  "ws://your-websocket-server"
-);
-const newMessage = ref("");
+const { messages, sendMessage, isConnected } = useWebSocket('ws://your-websocket-server');
+const newMessage = ref('');
 
 const sendNewMessage = () => {
   if (newMessage.value.trim()) {
@@ -19,14 +17,14 @@ const sendNewMessage = () => {
       content: newMessage.value,
       senderId: props.currentUser.id,
       roomId: props.roomId,
-      type: "text",
+      type: 'text'
     });
-    newMessage.value = "";
+    newMessage.value = '';
   }
 };
 
-const roomMessages = computed(() =>
-  messages.value.filter((msg) => msg.roomId === props.roomId)
+const roomMessages = computed(() => 
+  messages.value.filter(msg => msg.roomId === props.roomId)
 );
 </script>
 
@@ -36,10 +34,7 @@ const roomMessages = computed(() =>
       <div
         v-for="message in roomMessages"
         :key="message.id"
-        :class="[
-          'message',
-          { 'own-message': message.senderId === currentUser.id },
-        ]"
+        :class="['message', { 'own-message': message.senderId === currentUser.id }]"
       >
         <div class="message-content">
           {{ message.content }}
@@ -49,7 +44,7 @@ const roomMessages = computed(() =>
         </div>
       </div>
     </div>
-
+    
     <div class="message-input">
       <input
         v-model="newMessage"
@@ -57,7 +52,12 @@ const roomMessages = computed(() =>
         placeholder="Type a message..."
         @keyup.enter="sendNewMessage"
       />
-      <button @click="sendNewMessage" :disabled="!isConnected">Send</button>
+      <button 
+        @click="sendNewMessage"
+        :disabled="!isConnected"
+      >
+        Send
+      </button>
     </div>
   </div>
 </template>

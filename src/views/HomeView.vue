@@ -22,7 +22,7 @@ const joinChat = () => {
 
 <template>
   <div class="home">
-    <h1>Welcome to Chat App</h1>
+    <h1>Welcome to my TypeScript Chat App</h1>
     <div class="join-form">
       <input 
         v-model="username"

@@ -21,7 +21,7 @@ const users = ref<User[]>([
   },
   {
     id: "3",
-    username: "Joe Millar",
+    username: "Joe Miller",
     avatar: "JM",
     isOnline: false,
   },

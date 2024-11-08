@@ -1,49 +1,19 @@
 // src/views/ChatView.vue
 <script setup lang="ts">
-import { ref } from "vue";
-import { useWebSocket } from "../composables/useWebSocket";
 import { useChatStore } from "../stores/chat";
 import ChatRoom from "../components/ChatRoom.vue";
 import UserList from "../components/UserList.vue";
 
 const chatStore = useChatStore();
-const { isConnected, messages, error, sendMessage } = useWebSocket('ws://localhost:3000');
-
-const newMessage = ref("");
-
-const handleSendMessage = () => {
-  if (newMessage.value.trim() && chatStore.currentUser) {
-    sendMessage({
-      content: newMessage.value,
-      senderId: chatStore.currentUser.id,
-      roomId: 'general',
-      type: 'text'
-    });
-    newMessage.value = "";
-  }
-};
 </script>
 
 <template>
   <div class="chat-container">
-    <!-- Connection Status -->
-    <div v-if="!isConnected" class="connection-status">
-      Connecting to chat...
-    </div>
-
-    <!-- Error Message -->
-    <div v-if="error" class="error-message">
-      {{ error }}
-    </div>
-
-    <!-- Chat Interface -->
     <UserList class="user-list" />
     <ChatRoom
       v-if="chatStore.currentUser"
       :roomId="$route.params.roomId as string"
       :currentUser="chatStore.currentUser"
-      :messages="messages"
-      @send-message="handleSendMessage"
       class="chat-room"
     />
   </div>

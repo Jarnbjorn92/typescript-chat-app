@@ -23,7 +23,7 @@ const chatStore = useChatStore();
 .chat-container {
   display: grid;
   grid-template-columns: 250px 1fr;
-  height: 100vh;
+  height: 90vh;
 }
 
 .user-list {
@@ -41,7 +41,7 @@ const chatStore = useChatStore();
   padding: 0.5rem 1rem;
   background-color: #f8f9fa;
   border-radius: 0.25rem;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .error-message {
@@ -52,6 +52,6 @@ const chatStore = useChatStore();
   background-color: #dc3545;
   color: white;
   border-radius: 0.25rem;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 </style>

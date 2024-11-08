@@ -1,16 +1,18 @@
 // src/components/ChatRoom.vue
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import type { User } from '../types';
-import { useWebSocket } from '../composables/useWebSocket';
+import { ref, computed } from "vue";
+import type { User } from "../types";
+import { useWebSocket } from "../composables/useWebSocket";
 
 const props = defineProps<{
   roomId: string;
   currentUser: User;
 }>();
 
-const { messages, sendMessage, isConnected } = useWebSocket('ws://localhost:3000');
-const newMessage = ref('');
+const { messages, sendMessage, isConnected } = useWebSocket(
+  "ws://localhost:3000"
+);
+const newMessage = ref("");
 
 const sendNewMessage = () => {
   if (newMessage.value.trim() && isConnected.value) {
@@ -19,38 +21,37 @@ const sendNewMessage = () => {
         content: newMessage.value,
         senderId: props.currentUser.id,
         roomId: props.roomId,
-        type: 'text'
+        type: "text",
       });
-      newMessage.value = '';
+      newMessage.value = "";
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error("Error sending message:", error);
     }
   }
 };
 
-const roomMessages = computed(() => 
-  messages.value.filter(msg => msg.roomId === props.roomId)
+const roomMessages = computed(() =>
+  messages.value.filter((msg) => msg.roomId === props.roomId)
 );
 
 const formatTime = (timestamp: Date) => {
-  if (typeof timestamp === 'string') {
+  if (typeof timestamp === "string") {
     return new Date(timestamp).toLocaleTimeString();
   }
   return timestamp.toLocaleTimeString();
 };
 
 const getUserDisplayName = (senderId: string) => {
-  return senderId === props.currentUser.id ? 'You' : `User ${senderId.slice(0, 4)}`;
+  return senderId === props.currentUser.id
+    ? "You"
+    : `User ${senderId.slice(0, 4)}`;
 };
 </script>
 
 <template>
   <div class="chat-room">
     <!-- Connection Status -->
-    <div 
-      v-if="!isConnected" 
-      class="connection-status"
-    >
+    <div v-if="!isConnected" class="connection-status">
       Connecting to chat...
     </div>
 
@@ -61,7 +62,7 @@ const getUserDisplayName = (senderId: string) => {
         :key="message.id"
         :class="[
           'message',
-          { 'own-message': message.senderId === currentUser.id }
+          { 'own-message': message.senderId === currentUser.id },
         ]"
       >
         <div class="message-header">
@@ -77,7 +78,7 @@ const getUserDisplayName = (senderId: string) => {
         </div>
       </div>
     </div>
-    
+
     <!-- Message Input -->
     <div class="message-input">
       <input
@@ -87,7 +88,7 @@ const getUserDisplayName = (senderId: string) => {
         @keyup.enter="sendNewMessage"
         :disabled="!isConnected"
       />
-      <button 
+      <button
         @click="sendNewMessage"
         :disabled="!isConnected"
         class="send-button"
@@ -149,7 +150,7 @@ const getUserDisplayName = (senderId: string) => {
 }
 
 .own-message .message-bubble {
-  background-color: #007bff;
+  background-color: #42b983;
   color: white;
 }
 
@@ -187,7 +188,7 @@ const getUserDisplayName = (senderId: string) => {
 }
 
 .message-input input:focus {
-  border-color: #007bff;
+  border-color: #42b983;
 }
 
 .message-input input:disabled {
@@ -197,7 +198,7 @@ const getUserDisplayName = (senderId: string) => {
 
 .send-button {
   padding: 0.75rem 1.5rem;
-  background-color: #007bff;
+  background-color: #42b983;
   color: white;
   border: none;
   border-radius: 0.5rem;
@@ -206,7 +207,7 @@ const getUserDisplayName = (senderId: string) => {
 }
 
 .send-button:hover:not(:disabled) {
-  background-color: #0056b3;
+  background-color: #3aa876;
 }
 
 .send-button:disabled {

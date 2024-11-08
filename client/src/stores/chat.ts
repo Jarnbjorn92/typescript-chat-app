@@ -1,40 +1,51 @@
-import { defineStore } from 'pinia'
-import type { User, Message, ChatRoom } from '../types'
+import { defineStore } from "pinia";
+import type { User, Message } from "../types";
 
 interface ChatState {
   currentUser: User | null;
-  rooms: ChatRoom[];
-  activeRoom: ChatRoom | null;
+  users: User[];
   messages: Message[];
 }
 
-export const useChatStore = defineStore('chat', {
+export const useChatStore = defineStore("chat", {
   state: (): ChatState => ({
     currentUser: null,
-    rooms: [],
-    activeRoom: null,
-    messages: []
+    users: [],
+    messages: [],
   }),
-  
+
   actions: {
     setCurrentUser(user: User) {
       this.currentUser = user;
+      if (!this.users.find((u) => u.id === user.id)) {
+        this.users.push(user);
+      }
     },
+
+    addUser(user: User) {
+      if (!this.users.find((u) => u.id === user.id)) {
+        this.users.push(user);
+      }
+    },
+
+    removeUser(userId: string) {
+      this.users = this.users.filter((user) => user.id !== userId);
+    },
+
+    updateUserStatus(userId: string, isOnline: boolean) {
+      const user = this.users.find((u) => u.id === userId);
+      if (user) {
+        user.isOnline = isOnline;
+      }
+    },
+
     addMessage(message: Message) {
       this.messages.push(message);
     },
-    setActiveRoom(room: ChatRoom) {
-      this.activeRoom = room;
-    },
-    updateUserStatus(userId: string, isOnline: boolean) {
-      this.rooms.forEach(room => {
-        room.participants = room.participants.map(participant => {
-          if (participant.id === userId) {
-            return { ...participant, isOnline };
-          }
-          return participant;
-        });
-      });
-    }
-  }
-})
+  },
+
+  getters: {
+    onlineUsers: (state) => state.users.filter((user) => user.isOnline),
+    offlineUsers: (state) => state.users.filter((user) => !user.isOnline),
+  },
+});

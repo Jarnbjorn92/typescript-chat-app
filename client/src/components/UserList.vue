@@ -1,29 +1,16 @@
+// src/components/UserList.vue
 <script setup lang="ts">
 import { ref, computed } from "vue";
-// import { useChatStore } from "../stores/chat";
+import { useChatStore } from "../stores/chat";
 import type { User } from "../types";
 
-// const chatStore = useChatStore();
+const chatStore = useChatStore();
 
-// Connect to backend later
 const users = ref<User[]>([
   {
-    id: "1",
-    username: "James Holden",
-    avatar: "JH",
+    id: chatStore.currentUser?.id || "",
+    username: chatStore.currentUser?.username || "",
     isOnline: true,
-  },
-  {
-    id: "2",
-    username: "Amos Burton",
-    avatar: "AB",
-    isOnline: true,
-  },
-  {
-    id: "3",
-    username: "Joe Miller",
-    avatar: "JM",
-    isOnline: false,
   },
 ]);
 
@@ -33,6 +20,13 @@ const offlineUsers = computed(() =>
   users.value.filter((user) => !user.isOnline)
 );
 
+const formatUsername = (user: User) => {
+  if (user.id === chatStore.currentUser?.id) {
+    return `${user.username} (You)`;
+  }
+  return user.username;
+};
+
 const getInitials = (username: string) => {
   return username
     .split(" ")
@@ -40,57 +34,45 @@ const getInitials = (username: string) => {
     .join("")
     .toUpperCase();
 };
-
-const startChat = (user: User) => {
-  // Create or open a private chat later
-  console.log("Starting chat with:", user.username);
-};
 </script>
 
 <template>
   <div class="user-list">
     <div class="user-list-header">
-      <h2>Users</h2>
+      <h2>Online Users</h2>
       <div class="online-count">{{ onlineUsers.length }} online</div>
     </div>
 
     <div class="user-section">
-      <h3>Online</h3>
-      <div
-        v-for="user in onlineUsers"
-        :key="user.id"
-        class="user-item"
-        @click="startChat(user)"
-      >
-        <div
-          class="user-avatar"
-          :data-initials="user.avatar || getInitials(user.username)"
-        >
+      <div v-for="user in onlineUsers" :key="user.id" class="user-item">
+        <div class="user-avatar" :data-initials="getInitials(user.username)">
           <div class="status-indicator online"></div>
         </div>
         <div class="user-info">
-          <div class="username">{{ user.username }}</div>
+          <div
+            class="username"
+            :class="{ 'current-user': user.id === chatStore.currentUser?.id }"
+          >
+            {{ formatUsername(user) }}
+          </div>
           <div class="status">Online</div>
         </div>
       </div>
     </div>
 
-    <div class="user-section">
+    <div v-if="offlineUsers.length > 0" class="user-section">
       <h3>Offline</h3>
-      <div
-        v-for="user in offlineUsers"
-        :key="user.id"
-        class="user-item"
-        @click="startChat(user)"
-      >
-        <div
-          class="user-avatar"
-          :data-initials="user.avatar || getInitials(user.username)"
-        >
+      <div v-for="user in offlineUsers" :key="user.id" class="user-item">
+        <div class="user-avatar" :data-initials="getInitials(user.username)">
           <div class="status-indicator offline"></div>
         </div>
         <div class="user-info">
-          <div class="username">{{ user.username }}</div>
+          <div
+            class="username"
+            :class="{ 'current-user': user.id === chatStore.currentUser?.id }"
+          >
+            {{ formatUsername(user) }}
+          </div>
           <div class="status">Offline</div>
         </div>
       </div>
@@ -119,11 +101,15 @@ const startChat = (user: User) => {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
+  color: #2c3e50;
 }
 
 .online-count {
   font-size: 0.875rem;
   color: #6c757d;
+  background-color: #e9ecef;
+  padding: 0.25rem 0.5rem;
+  border-radius: 1rem;
 }
 
 .user-section {
@@ -142,9 +128,9 @@ const startChat = (user: User) => {
   align-items: center;
   padding: 0.5rem;
   border-radius: 0.5rem;
-  cursor: pointer;
-  transition: background-color 0.2s;
   margin-bottom: 0.5rem;
+  background-color: white;
+  transition: background-color 0.2s;
 }
 
 .user-item:hover {
@@ -155,12 +141,12 @@ const startChat = (user: User) => {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background-color: #dee2e6;
+  background-color: #3aa876;
+  color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  color: #495057;
   position: relative;
 }
 
@@ -172,10 +158,10 @@ const startChat = (user: User) => {
   position: absolute;
   bottom: 0;
   right: 0;
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  border: 2px solid #fff;
+  border: 2px solid white;
 }
 
 .status-indicator.online {
@@ -188,11 +174,16 @@ const startChat = (user: User) => {
 
 .user-info {
   margin-left: 0.75rem;
+  flex-grow: 1;
 }
 
 .username {
   font-weight: 500;
-  color: #212529;
+  color: #2c3e50;
+}
+
+.current-user {
+  color: #000;
 }
 
 .status {

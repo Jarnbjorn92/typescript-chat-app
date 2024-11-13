@@ -1,90 +1,143 @@
 import { ref, onMounted, onUnmounted } from "vue";
-import type { Message } from "../types";
+import type { Message, User } from "../types";
+
+interface WebSocketMessage {
+  eventType: string;
+  [key: string]: any;
+}
 
 export function useWebSocket(url: string) {
   const socket = ref<WebSocket | null>(null);
   const isConnected = ref(false);
   const messages = ref<Message[]>([]);
-  const error = ref<string>("");
-  const reconnectAttempts = ref(0);
-  const maxReconnectAttempts = 5;
+  const users = ref<User[]>([]);
+  const error = ref("");
 
-  // Reconnection logic
-  const reconnectTimeout = ref<number | null>(null);
-  
   const connect = () => {
-    try {
-      socket.value = new WebSocket(url);
+    socket.value = new WebSocket(url);
 
-      socket.value.onopen = () => {
-        isConnected.value = true;
-        reconnectAttempts.value = 0;
-        error.value = "";
-        console.log("WebSocket connected");
-      };
+    socket.value.onopen = () => {
+      isConnected.value = true;
+      console.log("WebSocket connected");
+    };
 
-      socket.value.onmessage = (event) => {
-        try {
-          const message: Message = JSON.parse(event.data);
-          messages.value.push(message);
-        } catch (e) {
-          console.error("Error parsing message:", e);
+    socket.value.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data) as WebSocketMessage;
+
+        switch (data.eventType) {
+          case "message":
+            messages.value.push(data.message);
+            // Auto-scroll to bottom on new message
+            setTimeout(() => {
+              const container = document.querySelector('.messages-container');
+              if (container) {
+                container.scrollTop = container.scrollHeight;
+              }
+            }, 0);
+            break;
+
+          case "messageHistory":
+            messages.value = data.messages;
+            break;
+
+          case "users":
+            users.value = data.users;
+            break;
+
+          case "joined":
+            console.log("Successfully joined:", data.user);
+            break;
+
+          case "error":
+            error.value = data.message;
+            console.error("Server error:", data.message);
+            break;
+
+          default:
+            console.warn("Unknown message type:", data.eventType);
         }
-      };
+      } catch (e) {
+        console.error("Error parsing message:", e);
+        error.value = "Failed to parse server message";
+      }
+    };
 
-      socket.value.onclose = () => {
-        isConnected.value = false;
-        console.log("WebSocket disconnected");
-        
-        // Attempt to reconnect
-        if (reconnectAttempts.value < maxReconnectAttempts) {
-          reconnectAttempts.value++;
-          console.log(`Reconnecting... Attempt ${reconnectAttempts.value}`);
-          reconnectTimeout.value = window.setTimeout(() => {
-            connect();
-          }, 1000 * reconnectAttempts.value);
-        } else {
-          error.value = "Maximum reconnection attempts reached";
+    socket.value.onclose = () => {
+      isConnected.value = false;
+      console.log("WebSocket disconnected");
+      // Attempt to reconnect after 2 seconds
+      setTimeout(() => {
+        if (!isConnected.value) {
+          console.log("Attempting to reconnect...");
+          connect();
         }
-      };
+      }, 2000);
+    };
 
-      socket.value.onerror = (event) => {
-        error.value = "WebSocket error occurred";
-        console.error("WebSocket error:", event);
-      };
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : "Failed to connect";
-    }
+    socket.value.onerror = (event) => {
+      error.value = "WebSocket error occurred";
+      console.error("WebSocket error:", event);
+    };
   };
 
   const sendMessage = (message: Omit<Message, "id" | "timestamp">) => {
     if (socket.value?.readyState === WebSocket.OPEN) {
       try {
-        socket.value.send(JSON.stringify(message));
+        const messagePayload = {
+          eventType: "message",
+          content: message.content,
+          roomId: message.roomId,
+          messageType: message.type // Use messageType to avoid conflict
+        };
+        
+        socket.value.send(JSON.stringify(messagePayload));
       } catch (e) {
-        error.value = e instanceof Error ? e.message : "Failed to send message";
+        console.error("Error sending message:", e);
+        error.value = "Failed to send message";
       }
     } else {
       error.value = "WebSocket is not connected";
     }
   };
 
-  const disconnect = () => {
-    if (reconnectTimeout.value) {
-      clearTimeout(reconnectTimeout.value);
+  const joinChat = (username: string) => {
+    if (socket.value?.readyState === WebSocket.OPEN) {
+      try {
+        socket.value.send(
+          JSON.stringify({
+            eventType: "join",
+            username,
+          })
+        );
+      } catch (e) {
+        console.error("Error joining chat:", e);
+        error.value = "Failed to join chat";
+      }
+    } else {
+      error.value = "WebSocket is not connected";
     }
-    socket.value?.close();
+  };
+
+  const clearError = () => {
+    error.value = "";
   };
 
   onMounted(() => connect());
-  onUnmounted(() => disconnect());
+  onUnmounted(() => {
+    if (socket.value) {
+      socket.value.close();
+      socket.value = null;
+    }
+  });
 
   return {
     isConnected,
     messages,
+    users,
     error,
     sendMessage,
-    connect,
-    disconnect
+    joinChat,
+    clearError,
   };
 }

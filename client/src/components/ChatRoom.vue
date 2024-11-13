@@ -33,11 +33,26 @@ const roomMessages = computed(() =>
   messages.value.filter((msg) => msg.roomId === props.roomId)
 );
 
-const formatTime = (timestamp: Date) => {
-  if (typeof timestamp === "string") {
-    return new Date(timestamp).toLocaleTimeString();
+const formatTime = (timestamp: Date | string | undefined) => {
+  if (!timestamp) {
+    return ""; // Return empty string if timestamp is undefined
   }
-  return timestamp.toLocaleTimeString();
+
+  try {
+    const date =
+      typeof timestamp === "string" ? new Date(timestamp) : timestamp;
+
+    // Check if the date is valid
+    if (isNaN(date.getTime())) {
+      console.warn("Invalid timestamp:", timestamp);
+      return "";
+    }
+
+    return date.toLocaleTimeString();
+  } catch (error) {
+    console.error("Error formatting time:", error);
+    return "";
+  }
 };
 
 const getUserDisplayName = (senderId: string) => {
@@ -71,7 +86,7 @@ const getUserDisplayName = (senderId: string) => {
           <div class="message-content">
             {{ message.content }}
           </div>
-          <div class="message-timestamp">
+          <div class="message-timestamp" v-if="message.timestamp">
             {{ formatTime(message.timestamp) }}
           </div>
         </div>

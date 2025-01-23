@@ -19,12 +19,14 @@ export const useChatStore = defineStore("chat", {
     currentUser: null,
     users: [],
     messages: [],
-    rooms: [{
-      id: 'general',
-      name: 'General Chat',
-      participants: [],
-      isPrivate: false
-    }],
+    rooms: [
+      {
+        id: "general",
+        name: "General Chat",
+        participants: [],
+        isPrivate: false,
+      },
+    ],
     messageCache: [],
   }),
 
@@ -39,19 +41,25 @@ export const useChatStore = defineStore("chat", {
         .filter((user) => !user.isOnline)
         .sort((a, b) => a.username.localeCompare(b.username)),
 
-    messagesByRoom: (state) => (roomId: string): Message[] =>
-      state.messages.filter((message) => message.roomId === roomId),
+    messagesByRoom:
+      (state) =>
+      (roomId: string): Message[] =>
+        state.messages.filter((message) => message.roomId === roomId),
 
     userCount: (state): number => state.users.length,
 
     onlineCount: (state): number =>
       state.users.filter((user) => user.isOnline).length,
 
-    getUserById: (state) => (userId: string): User | undefined =>
-      state.users.find((user) => user.id === userId),
-      
-    getRoomById: (state) => (roomId: string): ChatRoom | undefined =>
-      state.rooms.find((room) => room.id === roomId),
+    getUserById:
+      (state) =>
+      (userId: string): User | undefined =>
+        state.users.find((user) => user.id === userId),
+
+    getRoomById:
+      (state) =>
+      (roomId: string): ChatRoom | undefined =>
+        state.rooms.find((room) => room.id === roomId),
   },
 
   actions: {
@@ -62,26 +70,51 @@ export const useChatStore = defineStore("chat", {
         isOnline: true,
         lastSeen: new Date(),
       };
-      
+
       // Add user to general room if not already present
-      const generalRoom = this.getRoomById('general');
+      const generalRoom = this.getRoomById("general");
       if (generalRoom) {
-        const isParticipant = generalRoom.participants.some(p => p.userId === user.id);
+        const isParticipant = generalRoom.participants.some(
+          (p) => p.userId === user.id
+        );
         if (!isParticipant) {
           generalRoom.participants.push({
             userId: user.id,
-            role: 'member',
-            joinedAt: new Date()
+            role: "member",
+            joinedAt: new Date(),
           });
         }
       }
-      
+
       this.addUser(this.currentUser);
+    },
+
+    setUsers(users: User[]) {
+      const currentUserId = this.currentUser?.id;
+      this.users = users
+        .map((user) => ({
+          id: user.id,
+          username: user.username,
+          isOnline: user.id === currentUserId ? true : user.isOnline,
+          lastSeen: user.lastSeen ?? new Date(),
+          role: user.role,
+        }))
+        .sort((a, b) => a.username.localeCompare(b.username));
+
+      if (currentUserId && !this.users.some((u) => u.id === currentUserId)) {
+        this.users.push({
+          ...this.currentUser!,
+          isOnline: true,
+          lastSeen: new Date(),
+        });
+      }
     },
 
     addUser(user: User) {
       const existingUserIndex = this.users.findIndex(
-        (u) => u.id === user.id || u.username.toLowerCase() === user.username.toLowerCase()
+        (u) =>
+          u.id === user.id ||
+          u.username.toLowerCase() === user.username.toLowerCase()
       );
 
       const normalizedUser: User = {
@@ -214,7 +247,9 @@ export const useChatStore = defineStore("chat", {
     removeParticipantFromRoom(roomId: string, userId: string) {
       const room = this.rooms.find((r) => r.id === roomId);
       if (room) {
-        room.participants = room.participants.filter((p) => p.userId !== userId);
+        room.participants = room.participants.filter(
+          (p) => p.userId !== userId
+        );
       }
     },
 

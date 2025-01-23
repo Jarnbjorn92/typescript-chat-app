@@ -48,32 +48,17 @@ const broadcast = (data: any, excludeClient?: WebSocket) => {
 
 const broadcastUserList = async () => {
   try {
-    const connectedUserIds = Array.from(clients.values()).map(
-      (client) => client.userId
-    );
-
-    await User.updateMany(
-      { _id: { $nin: connectedUserIds } },
-      { isOnline: false, lastSeen: new Date() }
-    );
-
-    await User.updateMany(
-      { _id: { $in: connectedUserIds } },
-      { isOnline: true }
-    );
-
     const users = await User.find({});
-    console.log("Broadcasting users:", users.length);
+    const activeUserIds = Array.from(clients.values()).map((c) => c.userId);
 
-    broadcast({
-      eventType: "users",
-      users: users.map((user) => ({
-        id: user._id.toString(),
-        username: user.username,
-        isOnline: user.isOnline,
-        lastSeen: user.lastSeen,
-      })),
-    });
+    const updatedUsers = users.map((user) => ({
+      id: user._id.toString(),
+      username: user.username,
+      isOnline: activeUserIds.includes(user._id.toString()),
+      lastSeen: user.lastSeen,
+    }));
+
+    broadcast({ eventType: "users", users: updatedUsers });
   } catch (error) {
     console.error("Error broadcasting users:", error);
   }

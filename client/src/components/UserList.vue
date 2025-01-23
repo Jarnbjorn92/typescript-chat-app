@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, watch } from "vue";
 import { useChatStore } from "../stores/chat";
-import type { User } from "../types";
+import type { User } from "../../../shared/types";
 
 const chatStore = useChatStore();
 

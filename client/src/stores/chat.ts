@@ -1,11 +1,17 @@
 import { defineStore } from "pinia";
-import type { User, Message, ChatRoom } from "../types";
+import type { User, Message, ChatRoom } from "../../../shared/types";
+
+interface MessageCache {
+  id: string;
+  timestamp: number;
+}
 
 interface ChatState {
   currentUser: User | null;
   users: User[];
   messages: Message[];
   rooms: ChatRoom[];
+  messageCache: MessageCache[];
 }
 
 export const useChatStore = defineStore("chat", {
@@ -13,7 +19,13 @@ export const useChatStore = defineStore("chat", {
     currentUser: null,
     users: [],
     messages: [],
-    rooms: [],
+    rooms: [{
+      id: 'general',
+      name: 'General Chat',
+      participants: [],
+      isPrivate: false
+    }],
+    messageCache: [],
   }),
 
   getters: {
@@ -27,20 +39,19 @@ export const useChatStore = defineStore("chat", {
         .filter((user) => !user.isOnline)
         .sort((a, b) => a.username.localeCompare(b.username)),
 
-    messagesByRoom:
-      (state) =>
-      (roomId: string): Message[] =>
-        state.messages.filter((message) => message.roomId === roomId),
+    messagesByRoom: (state) => (roomId: string): Message[] =>
+      state.messages.filter((message) => message.roomId === roomId),
 
     userCount: (state): number => state.users.length,
 
     onlineCount: (state): number =>
       state.users.filter((user) => user.isOnline).length,
 
-    getUserById:
-      (state) =>
-      (userId: string): User | undefined =>
-        state.users.find((user) => user.id === userId),
+    getUserById: (state) => (userId: string): User | undefined =>
+      state.users.find((user) => user.id === userId),
+      
+    getRoomById: (state) => (roomId: string): ChatRoom | undefined =>
+      state.rooms.find((room) => room.id === roomId),
   },
 
   actions: {
@@ -51,16 +62,26 @@ export const useChatStore = defineStore("chat", {
         isOnline: true,
         lastSeen: new Date(),
       };
-
+      
+      // Add user to general room if not already present
+      const generalRoom = this.getRoomById('general');
+      if (generalRoom) {
+        const isParticipant = generalRoom.participants.some(p => p.userId === user.id);
+        if (!isParticipant) {
+          generalRoom.participants.push({
+            userId: user.id,
+            role: 'member',
+            joinedAt: new Date()
+          });
+        }
+      }
+      
       this.addUser(this.currentUser);
     },
 
     addUser(user: User) {
-      console.log("Adding/updating user:", user);
       const existingUserIndex = this.users.findIndex(
-        (u) =>
-          u.id === user.id ||
-          u.username.toLowerCase() === user.username.toLowerCase()
+        (u) => u.id === user.id || u.username.toLowerCase() === user.username.toLowerCase()
       );
 
       const normalizedUser: User = {
@@ -71,7 +92,6 @@ export const useChatStore = defineStore("chat", {
       };
 
       if (existingUserIndex !== -1) {
-        // Update existing user while preserving online status for current user
         if (this.users[existingUserIndex].id === this.currentUser?.id) {
           normalizedUser.isOnline = true;
         }
@@ -80,50 +100,13 @@ export const useChatStore = defineStore("chat", {
         this.users.push(normalizedUser);
       }
 
-      // Sort users by username
       this.users = this.users.sort((a, b) =>
         a.username.localeCompare(b.username)
       );
-
-      console.log("Updated users list:", this.users);
-    },
-
-    setUsers(users: User[]) {
-      console.log("Setting users list:", users);
-      const currentUserId = this.currentUser?.id;
-
-      // Create a new normalized users array
-      const normalizedUsers = users.map((user) => ({
-        id: user.id,
-        username: user.username,
-        isOnline: user.id === currentUserId ? true : user.isOnline,
-        lastSeen: user.lastSeen ?? new Date(),
-      }));
-
-      // Ensure current user is included and marked as online
-      if (
-        currentUserId &&
-        !normalizedUsers.some((u) => u.id === currentUserId)
-      ) {
-        normalizedUsers.push({
-          ...this.currentUser!,
-          isOnline: true,
-          lastSeen: this.currentUser!.lastSeen ?? new Date(),
-        });
-      }
-
-      // Sort users by username
-      this.users = normalizedUsers.sort((a, b) =>
-        a.username.localeCompare(b.username)
-      );
-
-      console.log("Updated users list:", this.users);
     },
 
     updateUserStatus(userId: string, isOnline: boolean) {
       const user = this.users.find((u) => u.id === userId);
-
-      // Don't update status if it's the current user going offline
       if (user && !(this.currentUser?.id === userId && !isOnline)) {
         user.isOnline = isOnline;
         if (!isOnline) {
@@ -133,7 +116,29 @@ export const useChatStore = defineStore("chat", {
     },
 
     addMessage(message: Message) {
-      // Remove any pending version of this message
+      const cacheKey = `${message.senderId}-${message.timestamp.getTime()}`;
+      const isDuplicate = this.messageCache.some(
+        (cached) =>
+          cached.id === cacheKey &&
+          Math.abs(cached.timestamp - Date.now()) < 5000
+      );
+
+      if (isDuplicate) {
+        console.log("Duplicate message detected, skipping:", message);
+        return;
+      }
+
+      this.messageCache.push({
+        id: cacheKey,
+        timestamp: Date.now(),
+      });
+
+      // Clean up old cache entries
+      this.messageCache = this.messageCache.filter(
+        (entry) => Date.now() - entry.timestamp < 5000
+      );
+
+      // Remove pending version if exists
       this.messages = this.messages.filter(
         (m) =>
           !(
@@ -143,10 +148,7 @@ export const useChatStore = defineStore("chat", {
           )
       );
 
-      // Add the new message
       this.messages.push(message);
-
-      // Sort messages by timestamp
       this.messages.sort(
         (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
       );
@@ -162,12 +164,27 @@ export const useChatStore = defineStore("chat", {
       this.messages = this.messages.filter((m) => m.id !== messageId);
     },
 
+    handleDisconnect() {
+      if (this.currentUser) {
+        this.updateUserStatus(this.currentUser.id, false);
+      }
+
+      this.users.forEach((user) => {
+        if (user.id !== this.currentUser?.id) {
+          this.updateUserStatus(user.id, false);
+        }
+      });
+    },
+
     addRoom(room: ChatRoom) {
       const existingIndex = this.rooms.findIndex((r) => r.id === room.id);
       if (existingIndex !== -1) {
-        this.rooms[existingIndex] = room;
+        this.rooms[existingIndex] = {
+          ...room,
+          participants: [...room.participants],
+        };
       } else {
-        this.rooms.push(room);
+        this.rooms.push({ ...room, participants: [...room.participants] });
       }
     },
 
@@ -180,24 +197,30 @@ export const useChatStore = defineStore("chat", {
 
     removeRoom(roomId: string) {
       this.rooms = this.rooms.filter((r) => r.id !== roomId);
+      this.messages = this.messages.filter((m) => m.roomId !== roomId);
     },
 
     addParticipantToRoom(roomId: string, user: User) {
       const room = this.rooms.find((r) => r.id === roomId);
-      if (room && !room.participants.some((p) => p.id === user.id)) {
-        room.participants.push(user);
+      if (room && !room.participants.some((p) => p.userId === user.id)) {
+        room.participants.push({
+          userId: user.id,
+          role: user.role ?? "member",
+          joinedAt: new Date(),
+        });
       }
     },
 
     removeParticipantFromRoom(roomId: string, userId: string) {
       const room = this.rooms.find((r) => r.id === roomId);
       if (room) {
-        room.participants = room.participants.filter((p) => p.id !== userId);
+        room.participants = room.participants.filter((p) => p.userId !== userId);
       }
     },
 
     clearMessages() {
       this.messages = [];
+      this.messageCache = [];
     },
 
     reset() {

@@ -1,8 +1,7 @@
 import { ref, onMounted, onUnmounted } from "vue";
-import type { Message, WebSocketMessage, User } from "../types";
+import type { Message, WebSocketMessage, User } from "../../../shared/types";
 import { useChatStore } from "../stores/chat";
 
-// Keep track of existing connections
 let globalSocket: WebSocket | null = null;
 let connectionAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
@@ -15,177 +14,190 @@ export function useWebSocket(url: string) {
   const error = ref("");
   const chatStore = useChatStore();
   const hasJoined = ref(false);
+  const connectionQueue = ref<Promise<void> | null>(null);
   let reconnectTimeout: ReturnType<typeof setTimeout>;
   let heartbeatInterval: ReturnType<typeof setInterval>;
 
-  const connect = () => {
+  const connect = async () => {
     if (globalSocket?.readyState === WebSocket.OPEN) {
-      console.log("Using existing socket connection");
       socket.value = globalSocket;
       isConnected.value = true;
       return;
     }
 
-    if (globalSocket?.readyState === WebSocket.CONNECTING) {
-      console.log("Connection already in progress");
+    if (connectionQueue.value) {
+      await connectionQueue.value;
       return;
     }
 
-    console.log("Attempting to connect to:", url);
-    connectionAttempts++;
+    connectionQueue.value = new Promise((resolve, reject) => {
+      console.log("Attempting to connect to:", url);
+      connectionAttempts++;
 
-    globalSocket = new WebSocket(url);
-    socket.value = globalSocket;
+      globalSocket = new WebSocket(url);
+      socket.value = globalSocket;
 
-    globalSocket.onopen = () => {
-      console.log("WebSocket connected successfully");
-      isConnected.value = true;
-      error.value = "";
-      connectionAttempts = 0;
-
-      // Rejoin chat if we were previously connected
-      if (chatStore.currentUser && hasJoined.value) {
-        joinChat(chatStore.currentUser.username);
-      }
-    };
-
-    globalSocket.onmessage = (event) => {
-      try {
-        const data: WebSocketMessage = JSON.parse(event.data);
-        console.log("Received websocket message:", data);
-
-        switch (data.eventType) {
-          case "message":
-            if (data.message) {
-              const message: Message = {
-                ...data.message,
-                id: data.message.id || data.message.id,
-                timestamp: new Date(data.message.timestamp),
-                createdAt: new Date(data.message.createdAt),
-                type: data.message.type || "text",
-              };
-              messages.value = messages.value.filter((m) => !m.pending);
-              messages.value.push(message);
-              chatStore.addMessage(message);
-            }
-            break;
-
-          case "messageHistory":
-            if (data.messages) {
-              const normalizedMessages = data.messages.map((msg) => ({
-                ...msg,
-                id: msg.id || msg.id,
-                timestamp: new Date(msg.timestamp),
-                createdAt: new Date(msg.createdAt),
-                type: msg.type || "text",
-              }));
-              messages.value = normalizedMessages;
-              chatStore.setMessages(normalizedMessages);
-            }
-            break;
-
-          case "users":
-            if (data.users) {
-              console.log("Received users update:", data.users);
-              const normalizedUsers: User[] = data.users.map((user) => ({
-                id: user.id || user.id,
-                username: user.username,
-                isOnline:
-                  user.id === chatStore.currentUser?.id ? true : user.isOnline,
-                lastSeen: user.lastSeen ? new Date(user.lastSeen) : new Date(),
-              }));
-              chatStore.setUsers(normalizedUsers);
-            }
-            break;
-
-          case "joined":
-            if (data.user) {
-              console.log("User joined:", data.user);
-              const normalizedUser: User = {
-                id: data.user.id || data.user.id,
-                username: data.user.username,
-                isOnline: true,
-                lastSeen: data.user.lastSeen
-                  ? new Date(data.user.lastSeen)
-                  : new Date(),
-              };
-
-              // Set the current user first if this is our join response
-              if (
-                !chatStore.currentUser ||
-                data.user.username === chatStore.currentUser.username
-              ) {
-                chatStore.setCurrentUser(normalizedUser);
-              }
-
-              // Then add to users list
-              chatStore.addUser(normalizedUser);
-
-              // Resolve the join promise if it exists
-              if (joinResolve) {
-                joinResolve();
-                joinResolve = null;
-              }
-            }
-            break;
-
-          case "userLeft":
-            if (data.user) {
-              console.log("User left:", data.user);
-              const userId = data.user.id || data.user.id;
-              chatStore.updateUserStatus(userId, false);
-            }
-            break;
-
-          case "error":
-            error.value = data.error || "An error occurred";
-            console.error("WebSocket error message:", data.error);
-            break;
+      const timeoutId = setTimeout(() => {
+        if (globalSocket?.readyState !== WebSocket.OPEN) {
+          globalSocket?.close();
+          reject(new Error("Connection timeout"));
         }
-      } catch (e) {
-        console.error("Failed to parse WebSocket message:", e);
-        error.value = "Failed to process server message";
-      }
-    };
+      }, 10000);
 
-    globalSocket.onclose = (event) => {
-      console.log(
-        "WebSocket disconnected. Code:",
-        event.code,
-        "Reason:",
-        event.reason
-      );
-      isConnected.value = false;
-      socket.value = null;
-      globalSocket = null;
+      globalSocket.onopen = () => {
+        clearTimeout(timeoutId);
+        isConnected.value = true;
+        error.value = "";
+        connectionAttempts = 0;
+        resolve();
 
-      // Mark other users as offline
-      chatStore.users.forEach((user) => {
-        if (user.id !== chatStore.currentUser?.id) {
-          chatStore.updateUserStatus(user.id, false);
+        if (chatStore.currentUser && hasJoined.value) {
+          joinChat(chatStore.currentUser.username).catch(console.error);
         }
-      });
+      };
 
-      // Attempt to reconnect if we haven't exceeded max attempts
+      globalSocket.onmessage = (event) => {
+        try {
+          const data: WebSocketMessage = JSON.parse(event.data);
+          handleWebSocketMessage(data);
+        } catch (e) {
+          console.error("Failed to parse WebSocket message:", e);
+          error.value = "Failed to process server message";
+        }
+      };
+
+      globalSocket.onclose = (event) => {
+        clearTimeout(timeoutId);
+        handleDisconnect(event);
+        reject(new Error(`WebSocket closed: ${event.code}`));
+      };
+
+      globalSocket.onerror = (event) => {
+        console.error("WebSocket error:", event);
+        error.value = "Connection error occurred";
+        isConnected.value = false;
+      };
+    });
+
+    try {
+      await connectionQueue.value;
+    } catch (err) {
+      console.error("Connection failed:", err);
+      error.value = "Failed to connect to chat server";
+
       if (connectionAttempts < MAX_RECONNECT_ATTEMPTS) {
-        clearTimeout(reconnectTimeout);
-        reconnectTimeout = setTimeout(connect, 2000);
-      } else {
-        error.value = "Failed to connect after multiple attempts";
+        setTimeout(
+          connect,
+          Math.min(1000 * Math.pow(2, connectionAttempts), 30000)
+        );
       }
+    } finally {
+      connectionQueue.value = null;
+    }
+  };
+
+  const handleWebSocketMessage = (data: WebSocketMessage) => {
+    switch (data.eventType) {
+      case "message":
+        if (data.message) {
+          const message: Message = {
+            ...data.message,
+            timestamp: new Date(data.message.timestamp),
+            createdAt: new Date(data.message.createdAt),
+            type: data.message.type || "text",
+          };
+          chatStore.addMessage(message);
+        }
+        break;
+
+      case "messageHistory":
+        if (data.messages) {
+          const normalizedMessages = data.messages.map((msg) => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp),
+            createdAt: new Date(msg.createdAt),
+            type: msg.type || "text",
+          }));
+          chatStore.setMessages(normalizedMessages);
+        }
+        break;
+
+      case "users":
+        if (data.users) {
+          data.users.forEach(user => chatStore.setCurrentUser(user));
+        }
+        break;
+
+      case "joined":
+        if (data.user) {
+          handleUserJoined(data.user);
+        }
+        break;
+
+      case "userLeft":
+        if (data.user) {
+          chatStore.updateUserStatus(data.user.id, false);
+        }
+        break;
+
+      case "error":
+        error.value = data.error || "An error occurred";
+        console.error("WebSocket error message:", data.error);
+        break;
+    }
+  };
+
+  const handleDisconnect = (event: CloseEvent) => {
+    console.log(
+      "WebSocket disconnected. Code:",
+      event.code,
+      "Reason:",
+      event.reason
+    );
+    isConnected.value = false;
+    socket.value = null;
+    globalSocket = null;
+
+    chatStore.handleDisconnect();
+
+    if (connectionAttempts < MAX_RECONNECT_ATTEMPTS) {
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = setTimeout(connect, 2000);
+    } else {
+      error.value = "Failed to connect after multiple attempts";
+    }
+  };
+
+  const handleUserJoined = (user: User) => {
+    const normalizedUser: User = {
+      id: user.id,
+      username: user.username,
+      isOnline: true,
+      lastSeen: user.lastSeen ? new Date(user.lastSeen) : new Date(),
     };
 
-    globalSocket.onerror = (event) => {
-      console.error("WebSocket error:", event);
-      error.value = "Connection error occurred";
-      isConnected.value = false;
-    };
+    if (
+      !chatStore.currentUser ||
+      user.username === chatStore.currentUser.username
+    ) {
+      chatStore.setCurrentUser(normalizedUser);
+    }
+    chatStore.addUser(normalizedUser);
+
+    if (joinResolve) {
+      joinResolve();
+      joinResolve = null;
+    }
   };
 
   const sendMessage = (
     messageData: Omit<Message, "id" | "createdAt" | "timestamp">
   ) => {
     if (!globalSocket || globalSocket.readyState !== WebSocket.OPEN) {
+      console.error("Socket not ready:", {
+        socketExists: !!globalSocket,
+        readyState: globalSocket?.readyState,
+      });
       error.value = "Not connected to server";
       return;
     }
@@ -198,6 +210,7 @@ export function useWebSocket(url: string) {
         senderId: messageData.senderId,
         roomId: messageData.roomId,
         type: messageData.type,
+        status: "sent",
         timestamp: now,
         createdAt: now,
         pending: true,
@@ -206,6 +219,7 @@ export function useWebSocket(url: string) {
       messages.value.push(optimisticMessage);
       chatStore.addMessage(optimisticMessage);
 
+      console.log("Sending WebSocket message:", messageData);
       globalSocket.send(
         JSON.stringify({
           eventType: "message",
@@ -235,8 +249,7 @@ export function useWebSocket(url: string) {
 
     return new Promise<void>((resolve, reject) => {
       try {
-        console.log("Sending join payload for:", username);
-        joinResolve = resolve; // Store resolve function to call when we get server response
+        joinResolve = resolve;
         hasJoined.value = true;
 
         globalSocket!.send(
@@ -246,12 +259,11 @@ export function useWebSocket(url: string) {
           })
         );
 
-        // Add timeout to reject if server doesn't respond
         setTimeout(() => {
           if (joinResolve) {
             joinResolve = null;
             hasJoined.value = false;
-            reject(new Error("Join timeout - no response from server"));
+            reject(new Error("Join timeout"));
           }
         }, 5000);
       } catch (e) {
@@ -270,7 +282,7 @@ export function useWebSocket(url: string) {
       if (globalSocket?.readyState === WebSocket.OPEN) {
         globalSocket.send(JSON.stringify({ eventType: "ping" }));
       }
-    }, 30000); // Send heartbeat every 30 seconds
+    }, 30000);
   };
 
   onMounted(() => {
@@ -281,11 +293,7 @@ export function useWebSocket(url: string) {
   onUnmounted(() => {
     hasJoined.value = false;
     joinResolve = null;
-
-    if (chatStore.currentUser) {
-      chatStore.updateUserStatus(chatStore.currentUser.id, false);
-    }
-
+    chatStore.handleDisconnect();
     clearInterval(heartbeatInterval);
     clearTimeout(reconnectTimeout);
 

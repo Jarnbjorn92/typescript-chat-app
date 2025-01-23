@@ -2,87 +2,75 @@
 import { computed } from "vue";
 import { useChatStore } from "../stores/chat";
 
-const chatStore = useChatStore();
+const props = defineProps<{
+  roomId: string;
+}>();
 
-const currentUsername = computed(() => chatStore.currentUser?.username);
+const chatStore = useChatStore();
+const currentRoom = computed(() => chatStore.getRoomById(props.roomId));
+
+const participants = computed(
+  () =>
+    currentRoom.value?.participants.map((p) => {
+      const user = chatStore.getUserById(p.userId);
+      return {
+        ...user,
+        role: p.role,
+      };
+    }) || []
+);
+
+const getInitials = (username?: string) => {
+  if (!username) return "";
+  return username
+    .split(" ")
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase();
+};
 </script>
 
 <template>
   <div class="active-users">
     <div class="current-user">
-      You are signed in as: <span class="username">{{ currentUsername }}</span>
+      <div class="user-info">
+        <span class="username">{{ chatStore.currentUser?.username }}</span>
+        <span class="status">Online</span>
+      </div>
     </div>
-    <div class="users-list">
-      <h3>Active Users</h3>
+
+    <div class="room-info" v-if="currentRoom">
+      <h3>{{ currentRoom.name }}</h3>
+      <span class="participant-count">
+        {{ participants.length }} participants
+      </span>
+    </div>
+
+    <div class="participants-list">
       <div
-        v-for="user in chatStore.users"
-        :key="user.id"
-        :class="[
-          'user-item',
-          { 'current-user': user.id === chatStore.currentUser?.id },
-        ]"
+        v-for="participant in participants"
+        :key="participant.id"
+        class="participant-item"
       >
-        {{ user.username }}
-        <span v-if="user.id === chatStore.currentUser?.id">(You)</span>
-        <span
-          class="status-indicator"
-          :class="{ online: user.isOnline }"
-        ></span>
+        <div
+          class="user-avatar"
+          :data-initials="getInitials(participant.username)"
+        >
+          <div
+            class="status-indicator"
+            :class="{ online: participant.isOnline }"
+          ></div>
+        </div>
+        <div class="user-info">
+          <span class="username">
+            {{ participant.username }}
+            <span v-if="participant.id === chatStore.currentUser?.id"
+              >(You)</span
+            >
+          </span>
+          <span class="role">{{ participant.role }}</span>
+        </div>
       </div>
     </div>
   </div>
 </template>
-
-<style scoped>
-.active-users {
-  padding: 1rem;
-  background-color: white;
-  border-radius: 0.5rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.current-user {
-  margin-bottom: 1rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid #dee2e6;
-}
-
-.username {
-  font-weight: bold;
-  color: #42b983;
-}
-
-.users-list {
-  margin-top: 1rem;
-}
-
-.users-list h3 {
-  margin-bottom: 0.5rem;
-  color: #2c3e50;
-}
-
-.user-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem;
-  margin-bottom: 0.25rem;
-  border-radius: 0.25rem;
-  background-color: #f8f9fa;
-}
-
-.user-item.current-user {
-  background-color: #e9ecef;
-}
-
-.status-indicator {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: #dc3545;
-}
-
-.status-indicator.online {
-  background-color: #42b983;
-}
-</style>

@@ -91,23 +91,34 @@ export const useChatStore = defineStore("chat", {
 
     setUsers(users: User[]) {
       const currentUserId = this.currentUser?.id;
-      this.users = users
-        .map((user) => ({
-          id: user.id,
-          username: user.username,
-          isOnline: user.id === currentUserId ? true : user.isOnline,
-          lastSeen: user.lastSeen ?? new Date(),
-          role: user.role,
-        }))
-        .sort((a, b) => a.username.localeCompare(b.username));
 
-      if (currentUserId && !this.users.some((u) => u.id === currentUserId)) {
-        this.users.push({
-          ...this.currentUser!,
+      // Preserve current user's online status
+      const updatedUsers = users.map((user) => ({
+        id: user.id,
+        username: user.username,
+        isOnline: user.id === currentUserId ? true : user.isOnline,
+        lastSeen: user.lastSeen ?? new Date(),
+        role: user.role,
+      }));
+
+      // Make sure current user is included
+      if (
+        currentUserId &&
+        !updatedUsers.some((u) => u.id === currentUserId) &&
+        this.currentUser
+      ) {
+        updatedUsers.push({
+          ...this.currentUser,
           isOnline: true,
           lastSeen: new Date(),
+          role: this.currentUser.role, // Ensure role is included
         });
       }
+
+      // Sort by username
+      this.users = updatedUsers.sort((a, b) =>
+        a.username.localeCompare(b.username)
+      );
     },
 
     addUser(user: User) {
@@ -124,10 +135,12 @@ export const useChatStore = defineStore("chat", {
         lastSeen: user.lastSeen ?? new Date(),
       };
 
+      // If it's the current user, make sure it stays online
+      if (this.currentUser?.id === user.id) {
+        normalizedUser.isOnline = true;
+      }
+
       if (existingUserIndex !== -1) {
-        if (this.users[existingUserIndex].id === this.currentUser?.id) {
-          normalizedUser.isOnline = true;
-        }
         this.users[existingUserIndex] = normalizedUser;
       } else {
         this.users.push(normalizedUser);
@@ -149,11 +162,22 @@ export const useChatStore = defineStore("chat", {
     },
 
     addMessage(message: Message) {
-      const cacheKey = `${message.senderId}-${message.timestamp.getTime()}`;
-      const isDuplicate = this.messageCache.some(
-        (cached) =>
-          cached.id === cacheKey &&
-          Math.abs(cached.timestamp - Date.now()) < 5000
+      // Don't add empty messages
+      if (!message.content?.trim()) {
+        console.warn("Attempted to add empty message");
+        return;
+      }
+
+      // Check for duplicates using a more robust approach
+      const isDuplicate = this.messages.some(
+        (m) =>
+          m.id === message.id ||
+          (m.senderId === message.senderId &&
+            m.content === message.content &&
+            Math.abs(
+              new Date(m.timestamp).getTime() -
+                new Date(message.timestamp).getTime()
+            ) < 1000)
       );
 
       if (isDuplicate) {
@@ -161,8 +185,9 @@ export const useChatStore = defineStore("chat", {
         return;
       }
 
+      // Add to message cache to prevent duplicates
       this.messageCache.push({
-        id: cacheKey,
+        id: `${message.senderId}-${new Date(message.timestamp).getTime()}`,
         timestamp: Date.now(),
       });
 
@@ -171,25 +196,60 @@ export const useChatStore = defineStore("chat", {
         (entry) => Date.now() - entry.timestamp < 5000
       );
 
-      // Remove pending version if exists
+      // Replace pending version if exists
       this.messages = this.messages.filter(
         (m) =>
           !(
             m.pending &&
             m.senderId === message.senderId &&
-            Math.abs(m.timestamp.getTime() - message.timestamp.getTime()) < 1000
+            Math.abs(
+              new Date(m.timestamp).getTime() -
+                new Date(message.timestamp).getTime()
+            ) < 2000
           )
       );
 
       this.messages.push(message);
       this.messages.sort(
-        (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
+        (a, b) =>
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
       );
     },
 
+    updateOrAddMessage(message: Message) {
+      // Find any existing message with this ID or a pending message with similar content
+      const existingIndex = this.messages.findIndex(
+        (m) =>
+          m.id === message.id ||
+          (m.pending &&
+            m.senderId === message.senderId &&
+            m.content === message.content &&
+            Math.abs(
+              new Date(m.timestamp).getTime() -
+                new Date(message.timestamp).getTime()
+            ) < 2000)
+      );
+
+      if (existingIndex !== -1) {
+        // Update existing message
+        this.messages[existingIndex] = {
+          ...message,
+          pending: false,
+        };
+      } else {
+        // Add as new message
+        this.addMessage(message);
+      }
+    },
+
     setMessages(messages: Message[]) {
-      this.messages = messages.sort(
-        (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
+      // Filter out empty messages
+      const validMessages = messages.filter((msg) => msg.content?.trim());
+
+      // Sort by timestamp
+      this.messages = validMessages.sort(
+        (a, b) =>
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
       );
     },
 

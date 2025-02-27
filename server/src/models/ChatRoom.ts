@@ -2,6 +2,12 @@ import mongoose from "mongoose";
 
 const chatRoomSchema = new mongoose.Schema(
   {
+    id: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+    },
     name: {
       type: String,
       required: true,
@@ -11,7 +17,7 @@ const chatRoomSchema = new mongoose.Schema(
     type: {
       type: String,
       enum: ["direct", "group", "channel"],
-      required: true,
+      default: "group",
     },
     participants: [
       {
@@ -69,3 +75,5 @@ chatRoomSchema.index({ "participants.userId": 1 });
 chatRoomSchema.index({ type: 1 });
 chatRoomSchema.index({ isPrivate: 1 });
 chatRoomSchema.index({ updatedAt: -1 });
+
+export const ChatRoom = mongoose.model("ChatRoom", chatRoomSchema);

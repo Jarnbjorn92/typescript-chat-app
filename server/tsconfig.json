@@ -3,7 +3,10 @@
         "target": "es2020",
         "module": "commonjs",
         "outDir": "./dist",
-        "rootDir": "./src",
+        "rootDir": "../",
+        "paths": {
+            "shared/*": ["../shared/*"]
+          },
         "strict": true,
         "esModuleInterop": true,
         "skipLibCheck": true,

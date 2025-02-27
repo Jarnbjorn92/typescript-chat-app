@@ -62,3 +62,5 @@ const userSchema = new mongoose.Schema(
 userSchema.index({ username: 1 });
 userSchema.index({ "preferences.language": 1 });
 userSchema.index({ createdAt: -1 });
+
+export const User = mongoose.model("User", userSchema);

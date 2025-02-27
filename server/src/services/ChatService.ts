@@ -1,4 +1,9 @@
-import { User, Message, ChatRoom } from "../types";
+import {
+  User,
+  Message,
+  ChatRoom,
+  RoomParticipant,
+} from "shared/types";
 
 class ChatService {
   private users: Map<string, User>;
@@ -23,14 +28,20 @@ class ChatService {
     this.users.set(user.id, user);
     const generalRoom = this.rooms.get("general");
     if (generalRoom) {
-      generalRoom.participants.push(user);
+      // Create a room participant from the user
+      const participant: RoomParticipant = {
+        userId: user.id,
+        role: user.role || "member",
+        joinedAt: new Date(),
+      };
+      generalRoom.participants.push(participant);
     }
   }
 
   removeUser(userId: string): void {
     this.users.delete(userId);
     this.rooms.forEach((room) => {
-      room.participants = room.participants.filter((p) => p.id !== userId);
+      room.participants = room.participants.filter((p) => p.userId !== userId);
     });
   }
 
@@ -45,7 +56,12 @@ class ChatService {
 
   getRoomUsers(roomId: string): User[] {
     const room = this.rooms.get(roomId);
-    return room ? room.participants : [];
+    if (!room) return [];
+
+    // Map participant IDs to users
+    return room.participants
+      .map((p) => this.users.get(p.userId))
+      .filter((user): user is User => user !== undefined);
   }
 
   getUser(userId: string): User | undefined {

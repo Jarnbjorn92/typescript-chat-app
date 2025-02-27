@@ -1,5 +1,5 @@
-`<script setup lang="ts">
-import { ref, watch, onMounted } from "vue";
+<script setup lang="ts">
+import { ref, watch, onMounted, computed } from "vue";
 import { useRouter } from "vue-router";
 import { useChatStore } from "../stores/chat";
 import { useWebSocket } from "../composables/useWebSocket";
@@ -9,49 +9,69 @@ const chatStore = useChatStore();
 const username = ref("");
 const error = ref("");
 const isJoining = ref(false);
-const { isConnected, error: wsError, joinChat } = useWebSocket("ws://localhost:3000");
-const showConnectionStatus = ref(true);
+const {
+  isConnected,
+  isReconnecting,
+  error: wsError,
+  joinChat,
+} = useWebSocket("ws://localhost:3000");
+const showConnectionStatus = computed(() => !isConnected || isReconnecting);
+const connectionStatusText = computed(() => {
+  if (isReconnecting.value) {
+    return "Reconnecting to server...";
+  }
+  return "Connecting to server...";
+});
 
 // Watch for connection and hide the status after connected
 watch(isConnected, (connected) => {
-  if (connected) {
-    showConnectionStatus.value = false;
-  } else {
-    showConnectionStatus.value = true;
+  if (connected && !isReconnecting.value) {
+    console.log("WebSocket connected successfully");
   }
 });
 
 const handleJoin = async () => {
-  if (username.value.trim()) {
-    try {
-      isJoining.value = true;
-      error.value = "";
-
-      // Wait for connection if needed
-      if (!isConnected.value) {
-        await new Promise<void>((resolve) => {
-          const checkConnection = setInterval(() => {
-            if (isConnected.value) {
-              clearInterval(checkConnection);
-              resolve();
-            }
-          }, 100);
-        });
-      }
-
-      // Send join message first and wait for response
-      await joinChat(username.value.trim());
-
-      // The server will send a "joined" event which will trigger setCurrentUser in the WebSocket handler
-      router.push("/chat/general");
-    } catch (e) {
-      console.error("Error joining chat:", e);
-      error.value = "Failed to join chat. Please try again.";
-    } finally {
-      isJoining.value = false;
-    }
-  } else {
+  if (!username.value.trim()) {
     error.value = "Please enter a username";
+    return;
+  }
+
+  try {
+    isJoining.value = true;
+    error.value = "";
+
+    // Wait for connection if needed
+    if (!isConnected.value) {
+      await new Promise<void>((resolve) => {
+        const checkConnection = setInterval(() => {
+          if (isConnected.value) {
+            clearInterval(checkConnection);
+            resolve();
+          }
+        }, 100);
+
+        // Set a timeout to prevent indefinite waiting
+        setTimeout(() => {
+          clearInterval(checkConnection);
+          if (!isConnected.value) {
+            throw new Error("Connection timeout. Please try again.");
+          }
+        }, 5000);
+      });
+    }
+
+    // Send join message first and wait for response
+    await joinChat(username.value.trim());
+
+    // The server will send a "joined" event which will trigger setCurrentUser in the WebSocket handler
+    router.push("/chat/general");
+  } catch (e) {
+    console.error("Error joining chat:", e);
+    error.value = `Failed to join chat: ${
+      e instanceof Error ? e.message : "Please try again."
+    }`;
+  } finally {
+    isJoining.value = false;
   }
 };
 
@@ -63,8 +83,8 @@ onMounted(() => {
 
 <template>
   <div class="home">
-    <div v-if="showConnectionStatus && !isConnected" class="connection-status">
-      Connecting to server...
+    <div v-if="showConnectionStatus" class="connection-status">
+      {{ connectionStatusText }}
     </div>
 
     <div class="content">
@@ -75,11 +95,11 @@ onMounted(() => {
           type="text"
           placeholder="Enter your username"
           @keyup.enter="handleJoin"
-          :disabled="!isConnected || isJoining"
+          :disabled="!isConnected || isJoining || isReconnecting"
         />
         <button
           @click="handleJoin"
-          :disabled="!isConnected || isJoining"
+          :disabled="!isConnected || isJoining || isReconnecting"
           class="join-button"
           :class="{ loading: isJoining }"
         >
@@ -212,4 +232,4 @@ input:disabled {
     transform: translate(-50%, -50%) rotate(360deg);
   }
 }
-</style>`
+</style>
